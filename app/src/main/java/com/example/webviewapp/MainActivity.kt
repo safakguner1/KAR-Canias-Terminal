@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -38,9 +39,16 @@ class MainActivity : AppCompatActivity() {
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout)
         sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+        setupCookieManager()
         setupWebView()
         setupSwipeRefresh()
         loadUrl()
+    }
+
+    private fun setupCookieManager() {
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -52,6 +60,9 @@ class MainActivity : AppCompatActivity() {
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
         
+        // Bellek ve önbellek yönetimi
+        settings.cacheMode = WebSettings.LOAD_DEFAULT
+        
         // Force Mobile User Agent
         val mobileUserAgent = "Mozilla/5.0 (Linux; Android 11; M3 SL20) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.210 Mobile Safari/537.36"
         settings.userAgentString = mobileUserAgent
@@ -59,13 +70,13 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                // Yükleme başlayınca animasyonun devam ettiğinden emin olalım (manuel refresh ise)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // Yükleme bitince animasyonu durdur
                 swipeRefreshLayout.isRefreshing = false
+                // Çerezleri fiziksel hafızaya kaydet (oturumu korumak için kritik)
+                CookieManager.getInstance().flush()
             }
 
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
@@ -79,10 +90,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupSwipeRefresh() {
         swipeRefreshLayout.setOnRefreshListener {
-            webView.reload()
+            // reload() bazen session bilgilerini temizleyebilir, URL ile yükleme daha güvenlidir
+            val currentUrl = webView.url
+            if (currentUrl != null) {
+                webView.loadUrl(currentUrl)
+            } else {
+                webView.reload()
+            }
         }
         
-        // Görsel iyileştirme (isteğe bağlı renkler)
         swipeRefreshLayout.setColorSchemeResources(
             android.R.color.holo_blue_bright,
             android.R.color.holo_green_light,
